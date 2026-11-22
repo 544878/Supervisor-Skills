@@ -4,6 +4,7 @@ import os
 import shutil
 import subprocess
 import sys
+from tempfile import TemporaryDirectory
 from pathlib import Path
 
 
@@ -86,20 +87,23 @@ def main() -> int:
         return 1
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    cmd = [drawio, "-x", "-f", "png", "-s", "1", "-o", str(output_path), str(input_path)]
     try:
-        result = subprocess.run(cmd, text=True, capture_output=True)
+        with TemporaryDirectory(dir=output_path.parent) as staging:
+            preview = Path(staging) / "preview.png"
+            cmd = [drawio, "-x", "-f", "png", "-s", "1", "-o", str(preview), str(input_path)]
+            result = subprocess.run(cmd, text=True, capture_output=True)
+            if result.stdout:
+                print(result.stdout, end="")
+            if result.stderr:
+                print(result.stderr, end="", file=sys.stderr)
+            if result.returncode != 0:
+                return result.returncode
+            if not preview.is_file() or preview.stat().st_size == 0:
+                print(f"export failed: {output_path}", file=sys.stderr)
+                return 1
+            preview.replace(output_path)
     except OSError as exc:
-        print(f"failed to start Draw.io CLI {drawio}: {exc}", file=sys.stderr)
-        return 1
-    if result.stdout:
-        print(result.stdout, end="")
-    if result.stderr:
-        print(result.stderr, end="", file=sys.stderr)
-    if result.returncode != 0:
-        return result.returncode
-    if not output_path.exists() or output_path.stat().st_size == 0:
-        print(f"export failed: {output_path}", file=sys.stderr)
+        print(f"export failed: {exc}", file=sys.stderr)
         return 1
     print(f"exported: {output_path}")
     return 0

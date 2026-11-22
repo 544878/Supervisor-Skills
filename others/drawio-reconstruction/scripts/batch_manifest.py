@@ -14,21 +14,16 @@ def iter_images(source_dir, recursive):
             yield path
 
 
-def output_pair_available(drawio_path, preview_path, overwrite):
-    return overwrite or (not drawio_path.exists() and not preview_path.exists())
-
-
-def unique_output_pair(output_dir, stem, overwrite):
-    candidate = output_dir / f"{stem}.drawio"
-    preview = candidate.with_suffix(".png")
-    if output_pair_available(candidate, preview, overwrite):
-        return candidate, preview
-    index = 2
+def unique_output_pair(output_dir, stem, overwrite, reserved):
+    index = 1
     while True:
-        revised = output_dir / f"{stem}-v{index}.drawio"
-        revised_preview = revised.with_suffix(".png")
-        if output_pair_available(revised, revised_preview, overwrite):
-            return revised, revised_preview
+        name = stem if index == 1 else f"{stem}-v{index}"
+        drawio = output_dir / f"{name}.drawio"
+        preview = drawio.with_suffix(".png")
+        key = name.casefold()
+        if key not in reserved and (overwrite or not (drawio.exists() or preview.exists())):
+            reserved.add(key)
+            return drawio, preview
         index += 1
 
 
@@ -36,10 +31,11 @@ def make_manifest(source_dir, output_dir, recursive=False, overwrite=False):
     source_dir = source_dir.resolve()
     output_dir = output_dir.resolve()
     entries = []
+    reserved = set()
 
     for index, image_path in enumerate(iter_images(source_dir, recursive), start=1):
         stem = image_path.stem
-        drawio_path, preview_path = unique_output_pair(output_dir, stem, overwrite)
+        drawio_path, preview_path = unique_output_pair(output_dir, stem, overwrite, reserved)
 
         entries.append(
             {
